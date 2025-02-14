@@ -1,2 +1,4 @@
 # Transformer-for-Highdimention-tensor
 # 3次元テンソルを入力として受け付けるTransformerの実装
+## アインシュタインの縮約
+これを今回の実装における3次元テンソルの計算方法としたが、3次元テンソル型のtransformerの計算にはこれが最適などと現段階でいうつもりはない。
