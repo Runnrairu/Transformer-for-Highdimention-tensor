@@ -1,3 +1,4 @@
+
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -89,3 +90,46 @@ model = TransformerModel(input_dim, output_dim, hidden_dim, num_layers).to(devic
 
 # 訓練開始
 train(model, dataset)
+
+# 翻訳関数
+
+def translate(model, sentence, en_vocab, fr_vocab, device):
+    model.eval()
+    # 入力文をテンソルに変換（形状: [1, seq_len]）
+    src_tensor = text_to_tensor(sentence, en_vocab).unsqueeze(0).to(device)
+    # 初期のターゲットは <sos> トークン（形状: [1, 1]）
+    tgt_tensor = torch.tensor([[fr_vocab['<sos>']]], dtype=torch.long).to(device)
+    
+    # nn.Transformerは通常 [seq_len, batch, d_model] の形状を要求しますが、
+    # train時はそのまま渡していたので、translate時に内部で形状変換を行います。
+    # ここでは、モデルのembeddingとtransformer部分を呼び出す際に、明示的に転置します。
+    with torch.no_grad():
+        for _ in range(50):  # 最大50トークン生成
+            # 埋め込みを取得し、転置する： [batch, seq_len, d_model] -> [seq_len, batch, d_model]
+            src_emb = model.embedding(src_tensor).transpose(0, 1)
+            tgt_emb = model.embedding(tgt_tensor).transpose(0, 1)
+            
+            # Transformer に渡す
+            transformer_output = model.transformer(src_emb, tgt_emb)
+            # 出力を元の形状に戻す
+            output = model.fc_out(transformer_output).transpose(0, 1)
+            
+            # 出力の最後のトークンを取得（形状: [batch, 1, output_dim]）
+            next_token = output[0, -1, :].argmax(dim=-1, keepdim=True)  # shape: [1]
+            next_token = next_token.unsqueeze(0)  # shape: [1, 1]
+            tgt_tensor = torch.cat([tgt_tensor, next_token], dim=1)
+            
+            if next_token.item() == fr_vocab['<eos>']:
+                break
+
+    # tgt_tensorの先頭は <sos> を除いて翻訳結果を取得
+    token_ids = tgt_tensor[0, 1:].tolist()
+    inv_fr_vocab = {v: k for k, v in fr_vocab.items()}
+    translated_sentence = ' '.join([inv_fr_vocab.get(idx, '<unk>') for idx in token_ids])
+    return translated_sentence
+
+# テスト例
+test_sentence = "hello world"
+translated = translate(model, test_sentence, en_vocab, fr_vocab, device=device)
+print(f"Original: {test_sentence}")
+print(f"Translated: {translated}")
